@@ -1,0 +1,13 @@
+# Web Framework & Server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# LlamaIndex Core & Google Gemini Integrations
+llama-index
+llama-index-llms-gemini
+llama-index-embeddings-gemini
+
+# Utilities & Config
+python-dotenv
+pydantic-settings

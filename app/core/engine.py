@@ -1,59 +1,68 @@
 import os
 from functools import lru_cache
-from llama_index.core import (
-    VectorStoreIndex,
-    StorageContext,
-    load_index_from_storage,
-)
+from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
 from llama_index.core.settings import Settings
-from llama_index.core.prompts import PromptTemplate
+from llama_index.core.agent import ReActAgent
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
 
 from app.core.loader import get_documents
 from app.core.settings import CACHE_DIR
+from app.core.tools import all_tools
 
 @lru_cache(maxsize=1)
 def create_chat_engine():
     """
-    Creates and returns a simple, strict, and efficient RAG query engine.
+    Creates the definitive conversational agent with a strict, non-negotiable, rule-based flow.
     """
-    print("Attempting to create simple, strict RAG engine...")
+    print("Attempting to create definitive conversational agent...")
     
     if os.path.exists(os.path.join(CACHE_DIR, "docstore.json")):
-        print(f"Loading knowledge base from cache: {CACHE_DIR}")
         storage_context = StorageContext.from_defaults(persist_dir=CACHE_DIR)
         index = load_index_from_storage(storage_context)
     else:
-        print("No cache found. Building knowledge base from documents...")
         documents = get_documents()
         index = VectorStoreIndex.from_documents(documents, show_progress=True)
-        print(f"Persisting knowledge base to cache: {CACHE_DIR}")
         index.storage_context.persist(persist_dir=CACHE_DIR)
 
-    query_engine = index.as_query_engine(
-        streaming=True, 
-        llm=Settings.llm,
-        similarity_top_k=5,
-    )
-    
-    qa_template_str = (
-        "You are the 100Gaj AI Assistant, a professional and helpful AI for the 100Gaj real estate company.\n"
-        "Your main purpose is to answer user questions about the company's services, properties, agents, and market insights based ONLY on the provided context.\n"
-        "If the context does not contain the information to answer the question, you MUST respond with: "
-        "'I can only answer questions related to 100Gaj. Please ask about our properties, services, or AI tools.'\n"
-        "Do not use any external knowledge. Format lists using Markdown.\n"
-        "---------------------\n"
-        "Context: {context_str}\n"
-        "---------------------\n"
-        "Question: {query_str}\n"
-        "Answer: "
-    )
-    
-    query_engine.update_prompts(
-        {"response_synthesizer:text_qa_template": PromptTemplate(qa_template_str)}
+    rag_tool = QueryEngineTool(
+        query_engine=index.as_query_engine(llm=Settings.llm),
+        metadata=ToolMetadata(
+            name="company_knowledge_base",
+            description="Use for general questions about 100Gaj company, services, team, or news."
+        ),
     )
 
-    print("Simple, strict RAG engine created successfully.")
-    return query_engine
+    all_engine_tools = [rag_tool] + all_tools
+    
+    # --- FINAL, ULTRA-STRICT CONVERSATIONAL PROMPT ---
+    chat_agent = ReActAgent.from_tools(
+        tools=all_engine_tools,
+        llm=Settings.llm,
+        verbose=True,
+        system_prompt="""
+        You are the 100Gaj AI Assistant. You are a precise, rule-following agent. Your ONLY job is to help users by following a strict script. DO NOT DEVIATE.
+
+        **Mandatory Protocol:**
+
+        1.  **Analyze User Query:** First, determine if the user is asking to find property in a location.
+
+        2.  **If it is a property search query:**
+            - You MUST check if you have the `location` and the `property_status` (if they want to 'buy' or 'rent').
+            - **If `property_status` is MISSING, your ONLY allowed action is to ask for it.** Do not use any tools.
+              - **Template:** "I can help with that. Are you looking to **Buy** or **Rent** in [Location]?"
+            - **If `property_status` IS provided:** Your next action is to ask for the property type.
+              - **Template:** "Great. What type of property are you looking for? The options are **Flat, Apartment, Villa, and Commercial**."
+            - **If ALL information is gathered** (location, status, and type), you are AUTHORIZED to use the `property_search_tool`.
+
+        3.  **If it is NOT a property search query:**
+            - You MUST use the `company_knowledge_base` tool to answer the question.
+
+        **CRITICAL RULE: NEVER ASSUME a parameter for the `property_search_tool`. If information is missing, your ONLY job is to ask the user for it by following the script above.**
+        """
+    )
+    
+    print("Definitive conversational agent created successfully.")
+    return chat_agent
 
 def get_chat_engine():
     return create_chat_engine()

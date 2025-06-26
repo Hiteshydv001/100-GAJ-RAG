@@ -1,3 +1,5 @@
+# File: app/core/engine.py
+
 import os
 from functools import lru_cache
 from llama_index.core import VectorStoreIndex, StorageContext, load_index_from_storage
@@ -7,57 +9,71 @@ from llama_index.core.tools import QueryEngineTool, ToolMetadata
 
 from app.core.loader import get_documents
 from app.core.settings import CACHE_DIR
-from app.core.tools import all_tools
+from app.core.tools import all_tools # This correctly imports the configured API tool
 
 @lru_cache(maxsize=1)
 def create_chat_engine():
     """
-    Creates the definitive conversational agent with a strict, non-negotiable, rule-based flow.
+    Creates the definitive conversational agent with a strict, rule-based flow.
     """
-    print("Attempting to create definitive conversational agent...")
+    print("Attempting to create the definitive conversational agent...")
     
     if os.path.exists(os.path.join(CACHE_DIR, "docstore.json")):
         storage_context = StorageContext.from_defaults(persist_dir=CACHE_DIR)
         index = load_index_from_storage(storage_context)
+        print("Knowledge base index loaded from cache.")
     else:
+        print("No cache found. Building knowledge base index from scratch...")
         documents = get_documents()
         index = VectorStoreIndex.from_documents(documents, show_progress=True)
         index.storage_context.persist(persist_dir=CACHE_DIR)
+        print("Knowledge base index built and cached.")
+
+    query_engine = index.as_query_engine(llm=Settings.llm, similarity_top_k=5)
 
     rag_tool = QueryEngineTool(
-        query_engine=index.as_query_engine(llm=Settings.llm),
+        query_engine=query_engine,
         metadata=ToolMetadata(
             name="company_knowledge_base",
-            description="Use for general questions about 100Gaj company, services, team, or news."
+            description=(
+                "This is the primary tool for answering all general questions. Use it to find information "
+                "about 100Gaj, its services, team, processes, AI tools, or any other topic that is not a direct property search."
+            )
         ),
     )
 
     all_engine_tools = [rag_tool] + all_tools
     
-    # --- FINAL, ULTRA-STRICT CONVERSATIONAL PROMPT ---
+    # --- THE ULTIMATE ROBUST & EFFICIENT SYSTEM PROMPT ---
     chat_agent = ReActAgent.from_tools(
         tools=all_engine_tools,
         llm=Settings.llm,
         verbose=True,
         system_prompt="""
-        You are the 100Gaj AI Assistant. You are a precise, rule-following agent. Your ONLY job is to help users by following a strict script. DO NOT DEVIATE.
+        You are 'Gaj-AI', an elite real estate consultant for 100Gaj. Your persona is professional, intelligent, and highly efficient. Your primary goal is to understand a user's needs and provide them with precise information from your internal systems.
 
-        **Mandatory Protocol:**
+        **CRITICAL RULE: You NEVER mention your tools to the user.** You do not say "I will use the tool" or "The API returned". You act as if you are accessing the information directly. Your internal `Thought` process is for your private reasoning and must not be part of your final answer.
 
-        1.  **Analyze User Query:** First, determine if the user is asking to find property in a location.
+        **YOUR TWO CORE FUNCTIONS:**
 
-        2.  **If it is a property search query:**
-            - You MUST check if you have the `location` and the `property_status` (if they want to 'buy' or 'rent').
-            - **If `property_status` is MISSING, your ONLY allowed action is to ask for it.** Do not use any tools.
-              - **Template:** "I can help with that. Are you looking to **Buy** or **Rent** in [Location]?"
-            - **If `property_status` IS provided:** Your next action is to ask for the property type.
-              - **Template:** "Great. What type of property are you looking for? The options are **Flat, Apartment, Villa, and Commercial**."
-            - **If ALL information is gathered** (location, status, and type), you are AUTHORIZED to use the `property_search_tool`.
+        **1. Information Provider (Default Function):**
+           - If the user asks ANY question that isn't a direct request to find properties (e.g., "what is 100Gaj?", "tell me about your services", "explain the buying process"), you MUST use the `company_knowledge_base` tool.
+           - After getting the information, you MUST synthesize it into a comprehensive, well-formatted response using **bolding** for titles and bullet points (`-`) for lists.
 
-        3.  **If it is NOT a property search query:**
-            - You MUST use the `company_knowledge_base` tool to answer the question.
+        **2. Property Search Consultant (Specialized Function):**
+           - You activate this function ONLY when the user asks to find properties (e.g., "find me a house", "search for apartments to rent").
+           - Your goal is to gather the necessary parameters for the `property_search_api` tool: `listing_type`, `city`, and optional `property_type`.
+           - **Intelligent Information Gathering:**
+             - First, analyze the user's initial message. Extract any parameters they have already provided.
+             - If `listing_type` ('buy'/'sale' or 'rent') is MISSING, this is your highest priority. You MUST ask for it. Example: "Certainly. Are you looking to Buy or Rent?"
+             - If `city` is MISSING, ask for it next. Example: "I can help with that. Which city are you interested in?"
+             - You can perform a search with just `listing_type` and `city`. You can ask for `property_type` to narrow the results. Example: "To help narrow the search, are you interested in a specific type of property, like an Apartment, Villa, or House?"
+           - **Execution and Response:**
+             - Once you have the required information, use the `property_search_api` tool.
+             - You MUST format the results in a natural way. Start with a clear introductory sentence.
+             - **Example Final Answer:** "Of course. I found 3 apartments for sale in Delhi. Here are the details:" (followed by the formatted list).
 
-        **CRITICAL RULE: NEVER ASSUME a parameter for the `property_search_tool`. If information is missing, your ONLY job is to ask the user for it by following the script above.**
+        **Final Check:** Before responding, review your answer. Does it sound like an expert consultant? Is it free of any mention of your tools? Is it formatted for easy reading?
         """
     )
     
@@ -65,8 +81,10 @@ def create_chat_engine():
     return chat_agent
 
 def get_chat_engine():
+    """Provides access to the singleton chat engine instance."""
     return create_chat_engine()
 
 def clear_engine_cache():
+    """Clears the in-memory cache for the chat engine."""
     create_chat_engine.cache_clear()
     print("In-memory RAG engine cache cleared.")

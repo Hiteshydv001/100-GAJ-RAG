@@ -8,6 +8,16 @@ llama-index
 llama-index-llms-gemini
 llama-index-embeddings-gemini
 
+# Web Scraping (Can be removed if you no longer need the scraper)
+playwright
+beautifulsoup4
+lxml
+
+# API Calls
+httpx
+
 # Utilities & Config
 python-dotenv
 pydantic-settings
+
+certifi

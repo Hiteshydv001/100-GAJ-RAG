@@ -15,7 +15,6 @@ Search Options:
 - Search (button)
 - Search by Map View (link)
 
-Image Placeholders: imageimageimageimageimage
 
 Section: Choose from Our Collection
 - Description: Discover properties that match your style, from modern apartments to luxury villas.

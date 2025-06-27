@@ -1,9 +1,8 @@
 # File: app/core/tools/__init__.py
 
-from .api_property_search import api_property_search_tool, get_property_details_tool
+from .api_property_search import property_database_tool
 
-# List all available tools for the agent
+# We now only have one tool for all property-related tasks.
 all_tools = [
-    api_property_search_tool,
-    get_property_details_tool,
+    property_database_tool,
 ]

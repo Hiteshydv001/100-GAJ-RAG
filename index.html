@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-g" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>100Gaj - AI Assistant Tester</title>
     <meta name="description" content="A test client for the 100Gaj AI-powered real estate assistant." />
@@ -70,6 +70,14 @@
             color: #34495e;
             border-bottom-left-radius: 5px;
         }
+        .ai-message a {
+            color: #16a085;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .ai-message a:hover {
+            text-decoration: underline;
+        }
         .ai-message ul, .ai-message ol {
             padding-left: 20px;
             margin-top: 5px;
@@ -83,7 +91,6 @@
             border-top: 1px solid #e0e0e0;
             background-color: #f9f9f9;
         }
-        /* --- NEW CSS FOR SUGGESTIONS --- */
         #suggestions {
             padding: 10px 15px 0;
             display: flex;
@@ -102,7 +109,6 @@
         .suggestion-btn:hover {
             background-color: #e0e0e0;
         }
-        /* --- END OF NEW CSS --- */
         #input-form {
             display: flex;
             margin-top: 10px;
@@ -154,14 +160,12 @@
             </div>
             <div id="loading">Assistant is typing...</div>
             <div id="form-container">
-                <!-- --- NEW HTML FOR SUGGESTIONS --- -->
                 <div id="suggestions">
                     <button class="suggestion-btn">What AI tools do you offer?</button>
                     <button class="suggestion-btn">Tell me about properties in Dwarka</button>
                     <button class="suggestion-btn">Who are your premium builders?</button>
                     <button class="suggestion-btn">Explain the buying process</button>
                 </div>
-                <!-- --- END OF NEW HTML --- -->
                 <form id="input-form">
                     <input id="input" autocomplete="off" placeholder="Ask about properties, builders, AI tools..." />
                     <button type="submit">Send</button>
@@ -177,12 +181,10 @@
       const loading = document.getElementById('loading');
       const suggestionsContainer = document.getElementById('suggestions');
       
-      // IMPORTANT: This points to your LOCAL backend server.
       const API_URL = 'http://localhost:8000/api/v1/chat';
 
       let chatHistory = [];
 
-      // --- NEW JAVASCRIPT TO HANDLE SUGGESTION CLICKS ---
       suggestionsContainer.addEventListener('click', function(e) {
         if (e.target.classList.contains('suggestion-btn')) {
             const question = e.target.textContent;
@@ -190,14 +192,12 @@
             form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         }
       });
-      // --- END OF NEW JAVASCRIPT ---
 
       form.addEventListener('submit', async function(e) {
           e.preventDefault();
           const userMessage = input.value.trim();
           if (!userMessage) return;
 
-          // Hide suggestions after the first question is asked
           suggestionsContainer.style.display = 'none';
 
           addMessageToUI(userMessage, 'user');
@@ -256,8 +256,15 @@
 
           } catch (error) {
               console.error('Fetch error:', error);
-              aiMessageContainer.innerHTML = 'Sorry, an error occurred. Please check the console and ensure the backend server is running.';
-              aiMessageContainer.style.color = 'red';
+              // --- START OF GRACEFUL ERROR HANDLING ---
+              const friendlyMessage = `
+                <p>Sorry, I'm currently facing a technical issue and cannot complete your request at this moment.</p>
+                <p>Our team has been notified. In the meantime, please feel free to explore our properties directly on our website:</p>
+                <p><a href="https://100gaj.vercel.app/" target="_blank" rel="noopener noreferrer">https://100gaj.vercel.app/</a></p>
+              `;
+              aiMessageContainer.innerHTML = friendlyMessage;
+              aiMessageContainer.style.color = '#e74c3c'; // A softer red color
+              // --- END OF GRACEFUL ERROR HANDLING ---
           } finally {
               loading.style.display = 'none';
               messages.scrollTop = messages.scrollHeight;

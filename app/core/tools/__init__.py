@@ -2,7 +2,7 @@
 
 from .api_property_search import property_database_tool
 
-# We now only have one tool for all property-related tasks.
+# Export all tools in a list for easy access
 all_tools = [
     property_database_tool,
 ]

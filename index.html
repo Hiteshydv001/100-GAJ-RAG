@@ -256,7 +256,7 @@
       const suggestionsContainer = document.getElementById('suggestions');
       const newChatBtn = document.getElementById('new-chat-btn');
       
-      const API_URL = 'https://one00-gaj-rag.onrender.com/api/v1/chat';
+      const API_URL = 'http://localhost:8000/api/v1/chat';
       let chatHistory = [];
       const MAX_HISTORY_LENGTH = 10;
       const TYPING_SPEED = 15;
@@ -266,10 +266,10 @@
       }
       
       async function typeOut(element, text) {
-        // Use a simple regex to handle markdown bolding **text** -> <b>text</b>
-        const processedText = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
-        for (let i = 0; i < processedText.length; i++) {
-            element.innerHTML += processedText.charAt(i);
+        // Remove any HTML tags from the text
+        const cleanText = text.replace(/<[^>]*>/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        for (let i = 0; i < cleanText.length; i++) {
+            element.textContent += cleanText.charAt(i);
             messages.scrollTop = messages.scrollHeight;
             await new Promise(resolve => setTimeout(resolve, TYPING_SPEED));
         }
@@ -280,7 +280,7 @@
       function startNewChat() {
         chatHistory = [];
         messages.innerHTML = '';
-        addSystemNotification("Let's start fresh. The chat history has been cleared.");
+        addSystemNotification("Starting a new conversation.");
         initializeChat();
         suggestionsContainer.style.display = 'flex';
       }
@@ -309,36 +309,29 @@
           suggestionsContainer.style.display = 'none';
           addMessageToUI(userMessage, 'user');
           
-          chatHistory.push({ role: 'user', content: userMessage });
           input.value = '';
           loading.style.display = 'block';
-
-          const userMessagesCount = chatHistory.filter(m => m.role === 'user').length;
-          if (userMessagesCount > MAX_HISTORY_LENGTH) {
-              addSystemNotification("The conversation is getting long. Consider starting a new chat for fresh context.");
-          }
 
           const aiMessageElement = addMessageToUI('', 'ai');
 
           try {
               const response = await fetch(API_URL, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 
+                      'Content-Type': 'application/json',
+                      'Accept': 'text/event-stream'
+                  },
                   body: JSON.stringify({
-                      message: userMessage,
-                      chat_history: chatHistory
+                      message: userMessage
                   }),
               });
               
               if (!response.ok) {
-                  // This will now handle the 429 and 503 errors gracefully
-                  const errorData = await response.json();
-                  throw { status: response.status, detail: errorData.detail };
+                  throw new Error(`HTTP error! status: ${response.status}`);
               }
 
               const reader = response.body.getReader();
               const decoder = new TextDecoder();
-              let aiFullResponse = '';
 
               while (true) {
                   const { done, value } = await reader.read();
@@ -354,31 +347,21 @@
                               const data = JSON.parse(dataStr);
                               if (data.type === 'text') {
                                   await typeOut(aiMessageElement, data.data);
-                                  aiFullResponse += data.data;
+                              } else if (data.type === 'end') {
+                                  break;
                               }
                           } catch (error) {
                               console.error('Failed to parse stream data:', dataStr, error);
+                              continue;
                           }
                       }
                   }
               }
 
-              chatHistory.push({ role: 'assistant', content: aiFullResponse });
-
           } catch (error) {
               console.error('Fetch error:', error);
-              // --- START OF GRACEFUL & CUSTOM ERROR HANDLING ---
-              let friendlyMessage = `I'm sorry, I've encountered a system-level error and cannot continue this conversation. Please try starting a new chat.`; // Default
-              
-              if (error.status === 429 || (error.detail && error.detail.includes("limit"))) {
-                friendlyMessage = `We are currently experiencing very high demand, which has caused a temporary technical issue. Our team is working on it. Please try your request again in a few moments. Until then, you can explore our properties directly on our website: https://100gaj.vercel.app/`;
-              } else if (error.status === 503 || (error.detail && error.detail.includes("overloaded"))) {
-                friendlyMessage = `The AI service is currently overloaded with requests. This is a temporary issue. Please try again in a moment.`;
-              }
-              
-              aiMessageElement.innerHTML = friendlyMessage;
+              aiMessageElement.textContent = `I apologize, but I've encountered a technical issue. Please try again.`;
               aiMessageElement.style.color = 'var(--error-color)';
-              // --- END OF GRACEFUL & CUSTOM ERROR HANDLING ---
           } finally {
               loading.style.display = 'none';
               messages.scrollTop = messages.scrollHeight;

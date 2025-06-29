@@ -1,10 +1,10 @@
-# File: app/core/tools/api_property_search.py
-
 import httpx
 from llama_index.core.tools import FunctionTool
 from typing import Optional, List, Dict, Union
 import certifi
 from functools import lru_cache
+import re
+import json # Import json for pretty printing
 
 API_URL = "https://100gaj.vercel.app/api/properties"
 _property_data_cache: List[Dict] = []
@@ -32,6 +32,28 @@ def _fetch_all_data() -> List[Dict]:
         print(f"FATAL ERROR fetching property data: {e}")
         return []
 
+def clean_description(desc: str) -> str:
+    if not isinstance(desc, str):
+        return "No description available."
+    
+    cleaned_desc = re.sub(r'(\n|^)##.*', '', desc)
+    cleaned_desc = re.sub(r'(\n|^)###.*', '', cleaned_desc)
+    cleaned_desc = re.sub(r'(\n|^)\*\*.*?\*\*', '', cleaned_desc)
+    
+    phrases_to_remove = [
+        "Here is a compelling real estate property description:",
+        "Here is the rewritten description, within the 150-word limit:",
+        "Here is a rewritten description that is under 150 words and highlights the property's features and benefits:",
+        "Here's a compelling real estate property description for the Luxury apartment:",
+        "Here is a rewritten version with some improvements:",
+        "Here is the final version:",
+        "Let me know if you need any further adjustments!"
+    ]
+    for phrase in phrases_to_remove:
+        cleaned_desc = cleaned_desc.replace(phrase, '')
+        
+    return cleaned_desc.strip()
+
 def query_property_database(
     city: Optional[str] = None,
     listing_type: Optional[Union[str, List[str]]] = None,
@@ -40,6 +62,14 @@ def query_property_database(
     """
     Searches the in-memory property database based on provided filters.
     It can now handle a list of listing_types (e.g., ['sale', 'rent']).
+    
+    Args:
+        city (str, optional): The city to search in (e.g., "Delhi", "Mumbai")
+        listing_type (str or list, optional): Type of listing ("sale" or "rent" or ["sale", "rent"])
+        property_type (str, optional): Type of property (e.g., "apartment", "house", "villa")
+    
+    Returns:
+        str: A formatted string containing the search results or an error message
     """
     all_properties = _fetch_all_data()
     if not all_properties:
@@ -50,15 +80,13 @@ def query_property_database(
     if city:
         results = [p for p in results if p.get("address", {}).get("city", "").lower() == city.lower()]
     
-    # --- BUG FIX: Handle both string and list for listing_type ---
     if listing_type:
         if isinstance(listing_type, str):
             listing_type_filters = [listing_type.lower().replace("buy", "sale")]
-        else: # It's a list
+        else:  # It's a list
             listing_type_filters = [lt.lower().replace("buy", "sale") for lt in listing_type]
         
         results = [p for p in results if p.get("listingType", "").lower() in listing_type_filters]
-    # --- END OF BUG FIX ---
 
     if property_type:
         results = [p for p in results if p.get("propertyType", "").lower() == property_type.lower()]
@@ -74,21 +102,27 @@ def query_property_database(
         price_str = f"₹{price:,}" if isinstance(price, (int, float)) else str(price)
 
         details = [
-            f"--- Property Found ---",
-            f"Title: {prop.get('title', 'N/A')}",
-            f"Location: {address.get('city', 'N/A')} ({address.get('street', 'N/A')})",
-            f"Listing: For {prop.get('listingType', 'N/A')} at {price_str}",
-            f"Type: {prop.get('propertyType', 'N/A').capitalize()} with {prop.get('bedrooms', 'N/A')} bedrooms",
-            f"Description: {prop.get('description', 'N/A').strip()}",
-            f"Contact: {owner.get('name', 'N/A')} at {owner.get('phone', 'N/A')}",
-            f"--- End of Property ---"
+            "Property Details:",
+            f"• {prop.get('title', 'N/A')}",
+            f"• Location: {address.get('city', 'N/A')} ({address.get('street', 'N/A')})",
+            f"• Available for {prop.get('listingType', 'N/A').upper()} at {price_str}",
+            f"• {prop.get('propertyType', 'N/A').capitalize()} with {prop.get('bedrooms', 'N/A')} bedrooms",
+            f"• Description: {prop.get('description', 'N/A').strip()}",
+            f"• Contact: {owner.get('name', 'N/A')} ({owner.get('phone', 'N/A')})",
+            ""  # Empty line for spacing
         ]
         formatted_results.append("\n".join(details))
     
-    return "\n\n".join(formatted_results)
+    return "\n".join(formatted_results)
 
+# Create the tool with clear description and parameters
 property_database_tool = FunctionTool.from_defaults(
     fn=query_property_database,
     name="query_property_database",
-    description="Use this to find and list properties. You can filter by `city`, `listing_type` (sale/rent), and `property_type`."
+    description="""Use this tool to search for properties in the database. You MUST provide at least one parameter:
+    - city: The city to search in (e.g., "Delhi", "Mumbai")
+    - listing_type: Type of listing ("sale" or "rent")
+    - property_type: Type of property (e.g., "apartment", "house", "villa")
+    
+    The tool will return formatted property listings or an error message if no properties are found."""
 )

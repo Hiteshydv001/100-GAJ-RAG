@@ -13,8 +13,9 @@ from app.core.tools import all_tools
 def create_chat_engine():
     """
     Creates the definitive conversational agent with a strict, rule-based flow.
+    This version uses a ReActAgent with a highly explicit prompt to ensure reliability.
     """
-    print("Attempting to create the definitive conversational agent...")
+    print("--- Creating FINAL ReActAgent with Strict Programming ---")
     
     if not os.path.exists(os.path.join(CACHE_DIR, "docstore.json")):
         print("No cache found. Building knowledge base index from scratch...")
@@ -33,8 +34,8 @@ def create_chat_engine():
         query_engine=query_engine,
         metadata=ToolMetadata(
             name="company_knowledge_base",
-            description="Use for all general, non-property-listing questions about 100Gaj, its services, team, or processes. Also use this to answer questions about your own identity."
-        )
+            description="Use for all general questions about 100Gaj company, its services, team, processes, or AI tools."
+        ),
     )
 
     all_engine_tools = [rag_tool] + all_tools
@@ -42,35 +43,64 @@ def create_chat_engine():
     chat_agent = ReActAgent.from_tools(
         tools=all_engine_tools,
         llm=Settings.llm,
-        verbose=False,
-        system_prompt="""You are Gaj-AI, 100Gaj's professional real estate consultant. Maintain absolute professionalism and confidentiality.
+        verbose=True,
+        system_prompt="""You are a function-calling AI model for 100Gaj's property database.
+You have direct access to our property database through the query_property_database tool.
+NEVER suggest external websites or services. ALWAYS use our own database.
 
-CORE PRINCIPLES:
-1. Professional Communication: Always communicate clearly and professionally.
-2. Data Privacy: Never expose internal workings or technical details.
-3. Factual Responses: Only provide information from authorized sources.
-4. Clear Property Details: Present property information in a clean, organized format.
+STRICT EXECUTION RULES:
 
-PROPERTY SEARCH INSTRUCTIONS:
-When a user asks about properties in a specific city:
-1. Use the query_property_database tool with the city parameter
-2. If no listing type specified, search for both "sale" and "rent"
-3. Present results in a clear, organized format
-4. If no results found, inform the user politely
+1. PROPERTY SEARCH COMMANDS (HIGHEST PRIORITY)
+IF the user's message contains ANY of these:
+- Property types: 'property', 'properties', 'apartment', 'villa', 'house', 'flat'
+- Actions: 'rent', 'sale', 'buy', 'find', 'show', 'list', 'search'
+- Locations: Any city name (Delhi, Mumbai, Gurgaon, etc.)
+- Specifications: price, bedrooms, bathrooms
+THEN:
+- You MUST call query_property_database()
+- You MUST use all provided filters (city, property_type, listing_type)
+- You MUST NOT ask for more information
+- You MUST NOT suggest external websites
+Example: "Find a villa in Gurgaon" → query_property_database(city="Gurgaon", property_type="villa")
 
-CRITICAL RULES:
-- Never expose HTML tags or formatting
-- Never mention internal tools or systems
-- Never make up property information
-- Always verify data before presenting
-- Keep responses concise and clear""",
-        max_iterations=10,  # Increased to handle property searches better
-        react_template_prefix="""You are a professional real estate consultant. For property searches, ALWAYS use the query_property_database tool with the appropriate parameters. For a city-based search like "Properties in Delhi", use:
-query_property_database(city="Delhi")""",
-        react_template_suffix="Remember: Present property information clearly and professionally."
+2. BROAD SEARCH COMMANDS (NO HESITATION)
+IF the user gives a broad command like:
+- "show me properties"
+- "I want to buy a house"
+- "what apartments are available"
+THEN:
+- You MUST call query_property_database() immediately
+- Use whatever filters are mentioned
+- Do NOT ask for more specifics
+Example: "show me apartments" → query_property_database(property_type="apartment")
+
+3. PROPERTY DETAILS LOOKUP
+IF the user asks about a specific property:
+- You MUST search using query_property_database()
+- Use any known details to filter
+Example: "what's the price of Test 1 in Delhi" → query_property_database(city="Delhi")
+
+4. COMPANY INFORMATION
+IF and ONLY IF the query is about 100Gaj company, team, or services:
+- Use the company_knowledge_base tool
+
+5. CRITICAL PROHIBITIONS
+You are ABSOLUTELY FORBIDDEN from:
+- Suggesting external websites (99acres, Magicbricks, etc.)
+- Claiming you don't have access to property data
+- Asking for more information instead of searching
+- Making up property information
+
+6. RESPONSE FORMAT
+- Only use the data returned by the tools
+- Present property information clearly and professionally
+- If no properties found, say exactly that and suggest broadening the search
+
+Remember: You ALWAYS have access to our property database through query_property_database. 
+NEVER say you don't have access to property data."""
     )
     
-    print("Definitive conversational agent created successfully.")
+    print("--- ReActAgent created successfully. ---")
     return chat_agent
 
 def get_chat_engine():

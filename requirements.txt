@@ -1,6 +1,9 @@
 # Web Framework & Server
-fastapi
-uvicorn[standard]
+# fastapi  <- REMOVE
+# uvicorn[standard] <- REMOVE
+Flask
+Flask-Cors
+
 python-multipart
 
 # LlamaIndex Core & Google Gemini Integrations

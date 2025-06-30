@@ -257,11 +257,12 @@
       const newChatBtn = document.getElementById('new-chat-btn');
       
       const API_URL = 'http://localhost:8000/api/v1/chat';
-      let chatHistory = [];
-      const MAX_HISTORY_LENGTH = 10;
+      let chatHistory = []; // This will now store the conversation history
+      const MAX_HISTORY_PAIRS = 5; // 5 pairs of user/assistant messages
       const TYPING_SPEED = 15;
 
       function initializeChat() {
+          // The initial AI message is for UI display only and not part of the LLM history
           addMessageToUI("Hello! I am Gaj-AI, your real estate consultant from 100Gaj. How can I assist you today?", 'ai', true);
       }
       
@@ -278,7 +279,7 @@
       newChatBtn.addEventListener('click', startNewChat);
 
       function startNewChat() {
-        chatHistory = [];
+        chatHistory = []; // Clear the history for a new session
         messages.innerHTML = '';
         addSystemNotification("Starting a new conversation.");
         initializeChat();
@@ -312,7 +313,9 @@
           input.value = '';
           loading.style.display = 'block';
 
+          // Create a placeholder for the AI's response
           const aiMessageElement = addMessageToUI('', 'ai');
+          let aiResponseForHistory = ''; // To accumulate the AI's full response
 
           try {
               const response = await fetch(API_URL, {
@@ -321,8 +324,10 @@
                       'Content-Type': 'application/json',
                       'Accept': 'text/event-stream'
                   },
+                  // Send the new message and the entire conversation history
                   body: JSON.stringify({
-                      message: userMessage
+                      message: userMessage,
+                      history: chatHistory 
                   }),
               });
               
@@ -346,6 +351,8 @@
                           try {
                               const data = JSON.parse(dataStr);
                               if (data.type === 'text') {
+                                  // The full response text is in data.data
+                                  aiResponseForHistory = data.data; 
                                   await typeOut(aiMessageElement, data.data);
                               } else if (data.type === 'end') {
                                   break;
@@ -356,6 +363,17 @@
                           }
                       }
                   }
+              }
+
+              // After the stream is complete, add the user message and AI response to history
+              chatHistory.push({ role: 'user', content: userMessage });
+              if (aiResponseForHistory) {
+                  chatHistory.push({ role: 'assistant', content: aiResponseForHistory });
+              }
+
+              // Keep the history from getting too long
+              if (chatHistory.length > MAX_HISTORY_PAIRS * 2) {
+                  chatHistory = chatHistory.slice(-MAX_HISTORY_PAIRS * 2);
               }
 
           } catch (error) {
